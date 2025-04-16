@@ -37,8 +37,8 @@ def my_cipher(message:bytes, brut_key:bytes)->bytes:
             cipher_message[len(cipher_message)-1] = xor_block(b, generate_round_key(base_key, round_index))
     return assembly_blocks(cipher_message)
 
-print("message d'origine : ")
-print(message)
+message = bytes(input("Veuillez entrer votre message: "), 'utf-8')
+key = bytes(input("Veuillez entrer votre clé: "), 'utf-8')
 cipher_message = my_cipher(message, brut_key)
 print("message chiffré : ")
 print(cipher_message)
