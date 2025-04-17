@@ -1,49 +1,87 @@
-message = b"Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
-brut_key = b"1v4rpRoVE8CzOL9LDB/CLtvluMbWjvXqZKtZ9rePj5QdfWvp1OmfvF/yhC6jIfHX"
-ROUND_AMMOUNT = 7
+import os
+SBOX = [((i * 17 + 31) ^ (i << 1)) % 256 for i in range(256)]
+def substitute(b):
+    return SBOX[b]
+def generate_iv(length=8):
+    return list(os.urandom(length))
+def derive_key(password, salt, iv, length=256, rounds=300):
+    base = [ord(c) for c in password] + salt + iv
+    mem = [0] * 1024 
+    for i in range(len(mem)):
+        mem[i] = (base[i % len(base)] * (i + 1)) % 256
+        for r in range(3):
+            mem[i] = (mem[i] * 73 + base[i % len(base)] * r + i) % 256
 
-def expend_key(key:bytes,target_size:int)->bytes:
-    if (len(key)==0):
-        raise ValueError("Clé vide non autorisé")
-    return (key*(target_size//len(key)+1))[:target_size]
+    k = []
+    for i in range(length):
+        val = (base[i % len(base)] + salt[i % len(salt)] + iv[i % len(iv)]) % 256
+        for r in range(rounds):
+            j = (val + r * 17 + i * 11) % len(mem)
+            val = (val * 31 + mem[j]) % 256
+        k.append(val)
+    return k
+def hmac_simul(data, key_stream):
+    mac = [0] * 16
+    for i, b in enumerate(data):
+        for j in range(16):
+            k = key_stream[(i + j) % len(key_stream)]
+            mac[j] = (mac[j] + b * (k + i + j) + j * 13) % 256
+            mac[j] = mac[j] ^ ((b + k * j + i) % 256)
+    return mac
+def chiffre(message, password):
+    iv = generate_iv()
+    salt = list(os.urandom(8))
+    key_stream = derive_key(password, salt, iv, length=len(message), rounds=300)
+    res = []
+    prev = sum(iv + salt) % 256
 
-def slice_message(message:bytes,block_size:int)->list:
-    blocks_list = []
-    padding = 0
-    blocks_ammount = len(message) // block_size + 1
-    for i in range(blocks_ammount):
-        blocks_list.append(message[padding:padding+block_size])
-        padding += block_size
-    return blocks_list
+    for i, c in enumerate(message):
+        char = ord(c)
+        k = key_stream[i]
+        sub = substitute((char ^ k ^ prev) % 256)
+        res.append(sub)
+        prev = (sub * 17 + i * 31 + prev * 13) % 256
 
-def assembly_blocks(blocks_list:list)->bytes:
-    return b''.join(blocks_list)
+    mac = hmac_simul(res, key_stream)
+    full = iv + salt + res + mac
+    return ''.join(f'{b:02x}' for b in full)
+def dechiffre(hexstr, password):
+    data = [int(hexstr[i:i+2], 16) for i in range(0, len(hexstr), 2)]
+    iv = data[:8]
+    salt = data[8:16]
+    mac = data[-16:]
+    chiffré = data[16:-16]
 
-def xor_block(block:bytes,key:bytes)->bytes:
-    return bytes([a ^ b for a,b in zip(block, key)])
+    key_stream = derive_key(password, salt, iv, length=len(chiffré), rounds=300)
+    if hmac_simul(chiffré, key_stream) != mac:
+        return "[ERREUR : Message modifié ou clé incorrecte]"
 
-def generate_round_key(base_key:bytes,round_index:int)->bytes:
-    return bytes([round_index^i^b for i,b in enumerate(base_key)])
+    res = ""
+    prev = sum(iv + salt) % 256
+    inv_sbox = [0] * 256
+    for i, s in enumerate(SBOX):
+        inv_sbox[s] = i
 
-def my_cipher(message:bytes, brut_key:bytes)->bytes:
-    # expension de la clé
-    base_key = expend_key(brut_key, 32)
-    cipher_message = []
-    for b in slice_message(message, 32):
-        # round initiale
-        cipher_message.append(xor_block(b, base_key))
-        # chaine de rounds
-        for round_index in range(ROUND_AMMOUNT):
-            cipher_message[len(cipher_message)-1] = xor_block(b, generate_round_key(base_key, round_index))
-    return assembly_blocks(cipher_message)
+    for i, c in enumerate(chiffré):
+        uns = inv_sbox[c]
+        k = key_stream[i]
+        m = (uns ^ k ^ prev) % 256
+        res += chr(m)
+        prev = (c * 17 + i * 31 + prev * 13) % 256
 
-message = bytes(input("Veuillez entrer votre message: "), 'utf-8')
-key = bytes(input("Veuillez entrer votre clé: "), 'utf-8')
-cipher_message = my_cipher(message, brut_key)
-print("message chiffré : ")
-print(cipher_message)
-
-assert len(expend_key("1v4rp", 32))==32, "Error test 1"
-assert len(expend_key("1v4rpRoVE8CzO", 32))==32, "Error test 2"
-assert len(expend_key("1v4rpRoVE8CzOL9LDB/CLtvluMbWjvXqZKtZ9rePj5QdfWvp1OmfvF/yhC6jIfHX1v4rpRoVE8CzOL9LDB/CLtvluMbWjvXqZKtZ9rePj5QdfWvp1OmfvF/yhC6jIfHX", 32))==32, "Error test 3"
-
+    return res
+def main():
+    mode = input("Chiffrer (c) ou Déchiffrer (d) ? ").strip().lower()
+    if mode == "c":
+        msg = input("Message à chiffrer : ")
+        key = input("Clé (même simple) : ")
+        print("\nMessage chiffré :")
+        print(chiffre(msg, key))
+    elif mode == "d":
+        hexstr = input("Texte chiffré (hex) : ").strip()
+        key = input("Clé utilisée : ")
+        print("\nMessage déchiffré :")
+        print(dechiffre(hexstr, key))
+    else:
+        print("Option invalide.")
+main()
