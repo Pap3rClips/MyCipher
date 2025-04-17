@@ -52,7 +52,7 @@ def modinv(a, m):
 
 # --- Génération des clés RSA ---
 
-def generer_cles(bits=1024):
+def generer_cles(bits=2048):
     p = generer_nombre_premier(bits // 2)
     q = generer_nombre_premier(bits // 2)
     while q == p:
@@ -118,7 +118,7 @@ def dechiffrer_securise(blocs, cle_privee, block_size_bytes):
 
 if __name__ == "__main__":
     print("🔐 Génération des clés RSA...")
-    cle_pub, cle_priv = generer_cles(bits=1024)
+    cle_pub, cle_priv = generer_cles(bits=2048)
     block_size_bytes = (cle_pub[0].bit_length() + 7) // 8
 
     texte_original = "Voici un message sécurisé."
