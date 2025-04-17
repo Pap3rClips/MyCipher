@@ -54,7 +54,7 @@ def modinv(a, m):
 
 # --- Génération des clés ---
 
-def generer_cles(bits=1024):
+def generer_cles(bits=2048):
     p = generer_nombre_premier(bits // 2)
     q = generer_nombre_premier(bits // 2)
     while q == p:
@@ -85,7 +85,7 @@ def dechiffrer(blocs, cle_privee):
     return ''.join([chr(pow(c, d, n)) for c in blocs])
 
 if __name__ == "__main__":
-    pub, priv = generer_cles(bits=1024)
+    pub, priv = generer_cles(bits=2048)
 
     texte = "Message sécurisé"
     chiffre = chiffrer(texte, pub)
