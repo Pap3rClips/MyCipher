@@ -52,7 +52,7 @@ def modinv(a, m):
 
 # --- Génération des clés RSA ---
 
-def generer_cles(bits=1024):
+def generer_cles(bits=2048):
     p = generer_nombre_premier(bits // 2)
     q = generer_nombre_premier(bits // 2)
     while q == p:
